@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>Maps</title>
+        <meta charset="utf-8">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script src='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.js'></script>
+        <link href='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.css' rel='stylesheet' />
+        <style>
+          body { 
+            margin: 0;
+            padding: 0; 
+          }
+        	#map { 
+            position: absolute; 
+            top: 0;
+            right: 0;
+            width: 50%; 
+            height: 100%;
+          }
+          .marker {
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-image: url(images/mapbox-icon.png);
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: cover;
+            background-color: transparent;
+          }
+          .mapboxgl-popup-content{
+            width: 400px;
+          }
+          .modal {
+            display: none;
+            position: absolute; 
+            padding-top: 0px; 
+            left: 0;
+            top: 0;
+            width: 50%; 
+            height: 100%; 
+            overflow: hidden; 
+            background-color: rgb(0,0,0); 
+            background-color: rgba(0,0,0,0.4); 
+          }
+          .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            overflow: hidden;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 100%;
+          }
+          #tooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 2;
+            min-width: 100px;
+            text-align: center;
+            padding: 5px 12px;
+            font-family: monospace;
+            background: #a0c020;
+            display: none;
+            opacity: 0;
+            border: 1px solid black;
+            box-shadow: 2px 2px 3px rgba(0, 0, 0, 0.5);
+            transition: opacity 0.25s linear;
+            border-radius: 3px;
+          }
+          .close {
+            color: black;
+            float: left;
+            margin-left: 40px;
+            font-size: 28px;
+            font-weight: bold;
+          }
+          .close:hover,
+          .close:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+          }
+        </style>
+    </head>
+    <body>
+      <div id="map"></div>
+
+      <div id="myModal" class="modal">
+        <div class="modal-content">
+          <!-- <span class="close">&times;</span> -->
+          <div id="container"></div>
+        </div>
+      </div>
+
+      <div id="tooltip"></div>
+
+      <script type="module">
+        init();
+        var pipelinesLocationData;
+        function init(){
+          var rawFile = new XMLHttpRequest();
+          rawFile.open("GET", "./data/pipelinesLocationData.csv", false);
+          rawFile.onreadystatechange = function ()
+          {
+            if(rawFile.readyState === 4)
+            {
+                if(rawFile.status === 200 || rawFile.status == 0)
+                {
+                    var allText = rawFile.response;
+                    var endResult = csvJSON(allText);
+                    pipelinesLocationData = endResult;
+                    pipelinesLocationData.splice(-1, 1);
+                }
+            }
+          }
+          rawFile.send(null);
+        }
+        function csvJSON(csv){
+          var lines=csv.split("\n");
+          var result = [];
+          var headers=lines[0].split(",");
+          for(var i=1;i<lines.length;i++){
+            var obj = {};
+            var currentline=lines[i].split(",");
+            for(var j=0;j<headers.length;j++){
+              obj[headers[j]] = currentline[j];
+            }
+            result.push(obj);
+          }
+          return result;
+        }
+
+        var coordinatesList = [];
+        for(var i = 0; i < pipelinesLocationData.length; i++){
+          coordinatesList.push(
+            [
+              [parseFloat(pipelinesLocationData[i].wkt.substring(pipelinesLocationData[i].wkt.indexOf('(') + 1, pipelinesLocationData[i].wkt.indexOf(' '))), parseFloat(pipelinesLocationData[i].wkt.substring(pipelinesLocationData[i].wkt.indexOf(' ') + 1, pipelinesLocationData[i].wkt.indexOf(':')))],
+              [parseFloat(pipelinesLocationData[i].wkt.substring(pipelinesLocationData[i].wkt.indexOf(':') + 1, pipelinesLocationData[i].wkt.lastIndexOf(' '))), parseFloat(pipelinesLocationData[i].wkt.substring(pipelinesLocationData[i].wkt.lastIndexOf(' ') + 1, pipelinesLocationData[i].wkt.indexOf(')')))]
+            ]
+          )
+        }
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2lraXNoYWgiLCJhIjoiY2pzZjM2eHh0MG90cjQ0czc2bWRmczcyayJ9.ttT_U0ixTIPJuX0Ldun0DQ';
+        var map = new mapboxgl.Map({
+          container: 'map',
+          style: 'mapbox://styles/mapbox/streets-v11',
+          center: coordinatesList[Math.ceil(coordinatesList.length/2)][0],
+          zoom: 15.5
+        });
+
+        var featuresArray = [];
+        for(var i = 0; i < coordinatesList.length; i++){
+          featuresArray.push(
+            {
+              'type': 'Feature',
+              'properties': {
+                "SMYS": pipelinesLocationData[i].SMYS,
+                "beg_station": pipelinesLocationData[i].beg_station,
+                "end_station": pipelinesLocationData[i].end_station,
+                "id": pipelinesLocationData[i].id,
+                "install_date": pipelinesLocationData[i].install_date,
+                "manufactured_date": pipelinesLocationData[i].manufactured_date,
+                "material": pipelinesLocationData[i].material,
+                "maximum_operating_pressure_kPa": pipelinesLocationData[i].maximum_operating_pressure_kPa,
+                "nominal_diameter_mm": pipelinesLocationData[i].nominal_diameter_mm,
+                "pipeline_name": pipelinesLocationData[i].pipeline_name,
+                "status": pipelinesLocationData[i].status,
+                "wall_thickness": pipelinesLocationData[i].wall_thickness,
+              },
+              'geometry': {
+                'type': 'LineString',
+                'coordinates': [
+                  coordinatesList[i][0],
+                  coordinatesList[i][1],
+                ]
+              }
+            }
+          );
+        }
+
+        var lines = {
+          "type": "FeatureCollection",
+          "features": featuresArray
+        }
+                      
+        map.on('load', function (e) {
+          map.addLayer({
+            "id": "locations",
+            "type": "line",
+            "source": {
+              "type": "geojson",
+              "data": lines
+            },
+            "layout": {
+              "line-join": "round",
+              "line-cap": "round",
+            },
+            "paint": {
+              "line-width": 5,
+              "line-color": '#0211b8'
+            }
+          });
+
+          addMarkers();
+        });
+
+        function addMarkers() {
+          lines.features.forEach(function(marker) {
+            var el = document.createElement('div');
+            el.id = "marker-" + marker.properties.id;
+            el.className = 'marker';
+
+            new mapboxgl.Marker(el, { offset: [0, -20] })
+              .setLngLat(centroid(marker.geometry.coordinates[0], marker.geometry.coordinates[1]))
+              .addTo(map);
+
+            el.addEventListener('mouseenter', function(e){
+              createPopUp(marker);
+            });
+
+            el.addEventListener('mouseleave', function(e){
+              closePopup();
+            });
+
+            el.addEventListener('click', function(e){
+              document.getElementById('container').innerHTML = "";
+              openModal();
+              cylinder(marker.properties.id);
+            });
+          });
+        }
+
+        function createPopUp(currentFeature) {
+          var popUps = document.getElementsByClassName('mapboxgl-popup');
+          if (popUps[0]) popUps[0].remove();
+          var popup = new mapboxgl.Popup({closeOnClick: false, offset: [0, -30]})
+            .setLngLat(centroid(currentFeature.geometry.coordinates[0], currentFeature.geometry.coordinates[1]))
+            .setHTML(
+              '<strong>Name: </strong>' + currentFeature.properties.pipeline_name + '<br/>' +
+              '<strong>SMYS: </strong>' + currentFeature.properties.SMYS + '<br/>' +
+              '<strong>Beginning Station: </strong>' + currentFeature.properties.beg_station + '<br/>' +
+              '<strong>Ending Station: </strong>' + currentFeature.properties.end_station + '<br/>' +
+              '<strong>Manufacture Date: </strong>' + currentFeature.properties.manufactured_date + '<br/>' +
+              '<strong>Install Date: </strong>' + currentFeature.properties.install_date + '<br/>' +
+              '<strong>Material: </strong>' + currentFeature.properties.material + '<br/>' +
+              '<strong>Maximum kPa: </strong>' + currentFeature.properties.maximum_operating_pressure_kPa + '<br/>' +
+              '<strong>Nominal Diameter: </strong>' + currentFeature.properties.nominal_diameter_mm + '<br/>' +
+              '<strong>Status: </strong>' + currentFeature.properties.status + '<br/>' +
+              '<strong>Wall Thickness: </strong>' + currentFeature.properties.wall_thickness + '<br/>'
+            )
+            .addTo(map);
+        }
+
+        function closePopup(){
+          var popUps = document.getElementsByClassName('mapboxgl-popup');
+          popUps[0].remove();
+        }
+
+        function centroid(coordinates1, coordinates2){
+          var x = (coordinates1[0] + coordinates2[0])/2;
+          var y = (coordinates1[1] + coordinates2[1])/2;
+          return [x, y];
+        }
+
+        function getRandomColor() {
+          var letters = '0123456789ABCDEF';
+          var color = '#';
+          for (var i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+          }
+          return color;
+        }
+
+        var modal = document.getElementById("myModal");
+        var span = document.getElementsByClassName("close")[0];
+        function openModal() {
+          modal.style.display = "block";
+        }
+        span.onclick = function() {
+          modal.style.display = "none";
+        }
+        window.onclick = function(event) {
+          if (event.target == modal) {
+            modal.style.display = "none";
+          }
+        }
+
+        import * as THREE from './js/three.module.js';
+        import Stats from './libs/stats.module.js';
+        import { TrackballControls } from './libs/TrackballControls.js';
+
+        function cylinder(pipelineId){
+          var container, stats;
+          var camera, scene, renderer, mesh, controls;
+          var raycaster = new THREE.Raycaster();
+          var mouseX = 0, mouseY = 0;
+          var tooltipDisplayTimeout;
+          var radius = 32;
+          var tooltipEnabledObjects = [];
+          var latestMouseProjection; 
+          var hoveredObj; 
+          var tooltipDisplayTimeout;
+
+          var windowHalfX = window.innerWidth / 2;
+          var windowHalfY = window.innerHeight / 2;
+
+          var geometry1 = new THREE.CylinderGeometry(radius, radius, 200, radius, 8);
+          geometry1.rotateZ(-Math.PI * 0.5);
+          var mouse = new THREE.Vector2();
+
+          init2();
+          animate();
+
+          var defectData;
+
+          function showTooltip() {
+            var divElement = $("#tooltip");
+
+            if (divElement && latestMouseProjection) {
+              divElement.css({
+                display: "block",
+                opacity: 0.0
+              });
+
+              var canvasHalfWidth = renderer.domElement.offsetWidth / 2;
+              var canvasHalfHeight = renderer.domElement.offsetHeight / 2;
+
+              var tooltipPosition = latestMouseProjection.clone().project(camera);
+              tooltipPosition.x = (tooltipPosition.x * canvasHalfWidth) + canvasHalfWidth + renderer.domElement.offsetLeft;
+              tooltipPosition.y = -(tooltipPosition.y * canvasHalfHeight) + canvasHalfHeight + renderer.domElement.offsetTop;
+
+              var tootipWidth = divElement[0].offsetWidth;
+              var tootipHeight = divElement[0].offsetHeight;
+
+              divElement.css({
+                left: `${tooltipPosition.x - tootipWidth / 2 + 100}px`,
+                top: `${tooltipPosition.y - tootipHeight - 5}px`
+              });
+
+              divElement.text(hoveredObj.userData.tooltipText);
+              setTimeout(function () {
+                divElement.css({
+                  opacity: 1.0
+                });
+              }, 25);
+            }
+
+          }
+
+          function hideTooltip() {
+            var divElement = $("#tooltip");
+            if (divElement) {
+              divElement.css({
+                display: "none"
+              });
+            }
+          }
+
+          function updateMouseCoords(event, coordsObj) {
+            coordsObj.x = ((event.clientX - renderer.domElement.offsetLeft + 0.5) / window.innerWidth) * 2 - 1;
+            coordsObj.y = -((event.clientY - renderer.domElement.offsetTop + 0.5) / window.innerHeight) * 2 + 1;
+          }
+
+          function handleManipulationUpdate() {
+            raycaster.setFromCamera(mouse, camera); {
+              var intersects = raycaster.intersectObjects(tooltipEnabledObjects);
+              if (intersects.length > 0) {
+                latestMouseProjection = intersects[0].point;
+                hoveredObj = intersects[0].object;
+              }
+            }
+            if (tooltipDisplayTimeout || !latestMouseProjection) {
+              clearTimeout(tooltipDisplayTimeout);
+              tooltipDisplayTimeout = undefined;
+              hideTooltip();
+            }
+            if (!tooltipDisplayTimeout && latestMouseProjection) {
+              tooltipDisplayTimeout = setTimeout(function () {
+                tooltipDisplayTimeout = undefined;
+                showTooltip();
+              }, 330);
+            }
+          }
+
+          function onMouseMove(event) {
+            updateMouseCoords(event, mouse);
+
+            latestMouseProjection = undefined;
+            hoveredObj = undefined;
+            handleManipulationUpdate();
+          }
+
+          window.addEventListener('mousemove', onMouseMove, false);
+          function grabCSVdata() {
+            var rawFile = new XMLHttpRequest();
+            rawFile.open("GET", "./data/defectData" + pipelineId + ".csv", false);
+            rawFile.onreadystatechange = function () {
+              if (rawFile.readyState === 4) {
+                if (rawFile.status === 200 || rawFile.status == 0) {
+                  var allText = rawFile.response;
+                  var endResult = csvJSON(allText);
+                  defectData = endResult;
+                  defectData.splice(-2, 2);
+                }
+              }
+            }
+            rawFile.send(null);
+          }
+
+          function init2() {
+            grabCSVdata();
+            container = document.getElementById('container');
+
+            camera = new THREE.PerspectiveCamera(5, window.innerWidth / window.innerHeight, 1, 10000);
+            camera.position.z = 2500;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xffffff);
+
+            var light = new THREE.AmbientLight(0xffffff);
+      
+            scene.add(light);
+
+            var canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+
+            var context = canvas.getContext('2d');
+            var gradient = context.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width / 2);
+            gradient.addColorStop(0.1, 'rgba(210,210,210,1)');
+            gradient.addColorStop(1, 'rgba(255,255,255,1)');
+
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            var shadowTexture = new THREE.CanvasTexture(canvas);
+
+            var shadowMaterial = new THREE.MeshBasicMaterial({ map: shadowTexture });
+            var shadowGeo = new THREE.PlaneBufferGeometry(300, 300, 1, 1);
+
+            var shadowMesh;
+
+            shadowMesh = new THREE.Mesh(shadowGeo, shadowMaterial);
+            shadowMesh.position.y = - 250;
+            shadowMesh.rotation.x = - Math.PI / 2;
+            scene.add(shadowMesh);
+
+            var texture = new THREE.ImageUtils.loadTexture('images/back.png');
+
+            var material = new THREE.MeshPhongMaterial({
+              color: 0xffffff,
+              flatShading: true,
+              vertexColors: true,
+              shininess: 0,
+              map: texture
+            });
+
+
+            var wireframeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true, transparent: true });
+
+            mesh = new THREE.Mesh(geometry1, material);
+            var wireframe = new THREE.Mesh(geometry1, wireframeMaterial);
+            mesh.add(wireframe);
+            mesh.position.x = - 115;
+            mesh.rotation.x = - 2;
+            scene.add(mesh);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+            renderer.shadowMap.enabled = false;
+
+            controls = new TrackballControls(camera, renderer.domElement);
+
+            for (var i = 0; i < defectData.length; i++) {
+                            
+              var x = parseInt(defectData[i].Log_Distance_m) - 100;
+
+              var fcp = defectData[i].Feature_Clock_Position;
+              var fcpHour = parseInt(fcp.split(':')[0], 10);
+              var fcpMinute = parseInt(fcp.split(':')[1], 10);
+              var degree = ((fcpHour * 60) + fcpMinute)/2;
+              //var degree = ((((40 / 60) + 5) / 12) * (2 * Math.PI * R)) / 2
+
+              //var y = Math.abs((radius)-((radius)*Math.cos(degree)));
+              //var z = Math.abs((radius)*(Math.sin(degree)));
+              var y = (radius) - ((radius) * Math.cos(degree*(Math.PI/180))); 
+              var z = (radius) * (Math.sin(degree*(Math.PI/180))); 
+
+              var dotGeometry = new THREE.Geometry();
+              dotGeometry.vertices.push(new THREE.Vector3(x, radius-y, z));
+              var dotMaterial = new THREE.PointsMaterial({ size: 7, sizeAttenuation: false, color: 0x000444 });
+              var dot = new THREE.Points(dotGeometry, dotMaterial);
+              dot.userData.tooltipText = "Log Distance(m): " + defectData[i].Log_Distance_m 
+                                       + ", Feature Clock Position: " + defectData[i].Feature_Clock_Position
+                                       + ", Length(mm): " + defectData[i].Length_mm
+                                       + ", Width(mm): " + defectData[i].Width_mm
+                                       + ", Depth percent (wt): " + defectData[i].Depth_percentwt
+              mesh.add(dot);
+              tooltipEnabledObjects.push(dot);
+            }
+
+            stats = new Stats();
+            //container.appendChild(stats.dom);
+
+            //document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+            window.addEventListener('resize', onWindowResize, false);
+          }
+
+          function onWindowResize() {
+            windowHalfX = window.innerWidth / 2;
+            windowHalfY = window.innerHeight / 2;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+          }
+
+          function onDocumentMouseMove(event) {
+            mouseX = (event.clientX - windowHalfX);
+            mouseY = (event.clientY - windowHalfY);
+            mesh.rotation.x += 0.5 * Math.PI / mouseY;
+          }
+
+          function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            render();
+            stats.update();
+          }
+
+          function render() {
+            renderer.render(scene, camera);
+          }
+
+          
+        }         
+        
+          
+      </script>
+    </body>
+
+</html>
